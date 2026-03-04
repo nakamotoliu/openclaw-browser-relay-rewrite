@@ -21,7 +21,11 @@
     "http://127.0.0.1/*",
     "http://localhost/*",
     "https://play.sonos.com/*",
-    "https://x.com/*"
+    "https://x.com/*",
+    "https://*.sonos.com/*",
+    "https://*.google.com/*",
+    "https://*.youtube.com/*",
+    "https://*.googleusercontent.com/*"
   ],
   "background": {
     "service_worker": "background.js",

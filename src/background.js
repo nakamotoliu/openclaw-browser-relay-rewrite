@@ -1,6 +1,6 @@
 import { buildRelayWsUrl, isRetryableReconnectError, reconnectDelayMs } from './background-utils.js'
 
-const AUTO_ATTACH_DOMAINS = ['play.sonos.com', 'x.com'];
+const AUTO_ATTACH_DOMAINS = ['play.sonos.com', 'x.com', 'sonos.com', 'google.com', 'youtube.com', 'googleusercontent.com'];
 
 const DEFAULT_PORT = 18792
 
@@ -124,6 +124,14 @@ async function rehydrateState() {
           expression: '1',
           returnByValue: true,
         })
+        const info = /** @type {any} */ (
+          await chrome.debugger.sendCommand({ tabId: entry.tabId }, 'Target.getTargetInfo')
+        )
+        const freshTargetId = String(info?.targetInfo?.targetId || '').trim()
+        const existing = tabs.get(entry.tabId)
+        if (existing && freshTargetId && existing.targetId !== freshTargetId) {
+          tabs.set(entry.tabId, { ...existing, targetId: freshTargetId })
+        }
       } catch {
         tabs.delete(entry.tabId)
         tabBySession.delete(entry.sessionId)
@@ -290,6 +298,10 @@ async function reannounceAttachedTabs() {
         await chrome.debugger.sendCommand({ tabId }, 'Target.getTargetInfo')
       )
       const targetInfo = info?.targetInfo
+      const freshTargetId = String(targetInfo?.targetId || '').trim()
+      if (freshTargetId && tab.targetId !== freshTargetId) {
+        tabs.set(tabId, { ...tab, targetId: freshTargetId })
+      }
 
       sendToRelay({
         method: 'forwardCDPEvent',
@@ -560,8 +572,16 @@ async function detachTab(tabId, reason) {
 }
 
 function isAutoAttachUrl(url) {
-  if (typeof url !== 'string') return false;
-  return AUTO_ATTACH_DOMAINS.some(domain => url.includes(domain));
+  if (typeof url !== 'string') return false
+  try {
+    const host = new URL(url).hostname.toLowerCase()
+    return AUTO_ATTACH_DOMAINS.some((domain) => {
+      const d = String(domain || '').toLowerCase().trim()
+      return host === d || host.endsWith(`.${d}`)
+    })
+  } catch {
+    return false
+  }
 }
 
 async function isAlreadyAttached(tabId) {
