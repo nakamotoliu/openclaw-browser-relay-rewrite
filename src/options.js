@@ -4,6 +4,7 @@ import { classifyRelayCheckException, classifyRelayCheckResponse } from './optio
 const DEFAULT_PORT = 18792
 const DEFAULT_URL = 'https://play.sonos.com/'
 const DEFAULT_AUTO_ATTACH_ALL_SITES = false
+const ALL_SITES_ORIGINS = ['http://*/*', 'https://*/*']
 
 function clampPort(value) {
   const n = Number.parseInt(String(value || ''), 10)
@@ -50,6 +51,20 @@ async function checkRelayReachable(port, token) {
   }
 }
 
+async function ensureAllSitesPermission(enabled) {
+  if (!chrome.permissions?.contains) return true
+
+  if (enabled) {
+    const alreadyGranted = await chrome.permissions.contains({ origins: ALL_SITES_ORIGINS })
+    if (alreadyGranted) return true
+    return await chrome.permissions.request({ origins: ALL_SITES_ORIGINS })
+  }
+
+  const alreadyGranted = await chrome.permissions.contains({ origins: ALL_SITES_ORIGINS })
+  if (!alreadyGranted) return true
+  return await chrome.permissions.remove({ origins: ALL_SITES_ORIGINS })
+}
+
 async function load() {
   const stored = await chrome.storage.local.get(['relayPort', 'gatewayToken', 'defaultUrl', 'autoAttachAllSites'])
   const port = clampPort(stored.relayPort)
@@ -80,7 +95,26 @@ async function save() {
   const port = clampPort(portInput?.value)
   const token = String(tokenInput?.value || '').trim()
   const defaultUrl = String(urlInput?.value || DEFAULT_URL).trim()
-  const autoAttachAllSites = autoAttachAllSitesInput?.checked === true
+  const requestedAutoAttachAllSites = autoAttachAllSitesInput?.checked === true
+
+  if (requestedAutoAttachAllSites) {
+    const confirmed = window.confirm(
+      'Enable all-sites auto-attach? This may attach any normal HTTP/HTTPS page and can stream browser debugging events to your local OpenClaw relay/gateway. Manual toolbar clicks will still keep the configured default-site fallback.'
+    )
+    if (!confirmed) {
+      if (autoAttachAllSitesInput) autoAttachAllSitesInput.checked = false
+      setStatus('error', 'All-sites mode was cancelled before saving.')
+      return
+    }
+  }
+
+  const permissionGranted = await ensureAllSitesPermission(requestedAutoAttachAllSites)
+  const autoAttachAllSites = requestedAutoAttachAllSites && permissionGranted
+
+  if (requestedAutoAttachAllSites && !permissionGranted) {
+    if (autoAttachAllSitesInput) autoAttachAllSitesInput.checked = false
+    setStatus('error', 'All-sites permission was not granted. Setting was not enabled.')
+  }
 
   await chrome.storage.local.set({ relayPort: port, gatewayToken: token, defaultUrl, autoAttachAllSites })
 
@@ -91,6 +125,9 @@ async function save() {
 
   updateRelayUrl(port)
   await checkRelayReachable(port, token)
+  if (!requestedAutoAttachAllSites || permissionGranted) {
+    setStatus('ok', autoAttachAllSites ? 'Saved. All-sites mode is enabled for this browser.' : 'Saved. All-sites mode is disabled.')
+  }
 }
 
 document.getElementById('save')?.addEventListener('click', () => void save())

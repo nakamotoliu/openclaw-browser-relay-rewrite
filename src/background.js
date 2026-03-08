@@ -577,14 +577,12 @@ async function detachTab(tabId, reason) {
   await persistState()
 }
 
-async function isAutoAttachUrl(url) {
+function isConfiguredAutoAttachUrl(url) {
   if (typeof url !== 'string') return false
   try {
     const parsed = new URL(url)
     const protocol = parsed.protocol.toLowerCase()
     if (protocol !== 'http:' && protocol !== 'https:') return false
-
-    if (await getAutoAttachAllSites()) return true
 
     const host = parsed.hostname.toLowerCase()
     return AUTO_ATTACH_DOMAINS.some((domain) => {
@@ -594,6 +592,24 @@ async function isAutoAttachUrl(url) {
   } catch {
     return false
   }
+}
+
+async function isAutoAttachUrl(url) {
+  if (isConfiguredAutoAttachUrl(url)) return true
+
+  if (typeof url !== 'string') return false
+  try {
+    const parsed = new URL(url)
+    const protocol = parsed.protocol.toLowerCase()
+    if (protocol !== 'http:' && protocol !== 'https:') return false
+    return await getAutoAttachAllSites()
+  } catch {
+    return false
+  }
+}
+
+function shouldOpenDefaultUrlForManualClick(url) {
+  return !isConfiguredAutoAttachUrl(url)
 }
 
 async function isAlreadyAttached(tabId) {
@@ -617,6 +633,16 @@ async function autoAttach(tabId, url, reason = 'auto') {
     })
 
     await ensureRelayConnection()
+    const currentTab = await chrome.tabs.get(tabId).catch(() => null)
+    if (!currentTab?.id || !(await isAutoAttachUrl(currentTab.url))) {
+      tabs.delete(tabId)
+      setBadge(tabId, 'off')
+      void chrome.action.setTitle({
+        tabId,
+        title: 'OpenClaw Browser Relay (click to attach/detach)',
+      })
+      return
+    }
     await attachTab(tabId)
   } catch (err) {
     tabs.delete(tabId)
@@ -633,8 +659,9 @@ async function connectOrToggleForActiveTab() {
   let tabId = active?.id
   const tabUrl = active?.url
 
-  // If current tab is not eligible for auto-attach, open default URL in new tab
-  if (tabId && !(await isAutoAttachUrl(tabUrl))) {
+  // Manual toolbar click keeps the original fallback behavior: if the active
+  // tab is not one of the configured default domains, open the default URL.
+  if (tabId && shouldOpenDefaultUrlForManualClick(tabUrl)) {
     const defaultUrl = await getDefaultUrl()
     try {
       const newTab = await chrome.tabs.create({ url: defaultUrl, active: true })
