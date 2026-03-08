@@ -3,6 +3,7 @@ import { buildRelayWsUrl, isRetryableReconnectError, reconnectDelayMs } from './
 const AUTO_ATTACH_DOMAINS = ['play.sonos.com', 'x.com', 'sonos.com', 'google.com', 'youtube.com', 'googleusercontent.com'];
 
 const DEFAULT_PORT = 18792
+const DEFAULT_AUTO_ATTACH_ALL_SITES = false
 
 const BADGE = {
   on: { text: 'ON', color: '#FF5A36' },
@@ -69,6 +70,11 @@ async function getDefaultUrl() {
   const stored = await chrome.storage.local.get(['defaultUrl'])
   const url = String(stored.defaultUrl || '').trim()
   return url || 'https://play.sonos.com/'
+}
+
+async function getAutoAttachAllSites() {
+  const stored = await chrome.storage.local.get(['autoAttachAllSites'])
+  return stored.autoAttachAllSites === true ? true : DEFAULT_AUTO_ATTACH_ALL_SITES
 }
 
 function setBadge(tabId, kind) {
@@ -571,10 +577,16 @@ async function detachTab(tabId, reason) {
   await persistState()
 }
 
-function isAutoAttachUrl(url) {
+async function isAutoAttachUrl(url) {
   if (typeof url !== 'string') return false
   try {
-    const host = new URL(url).hostname.toLowerCase()
+    const parsed = new URL(url)
+    const protocol = parsed.protocol.toLowerCase()
+    if (protocol !== 'http:' && protocol !== 'https:') return false
+
+    if (await getAutoAttachAllSites()) return true
+
+    const host = parsed.hostname.toLowerCase()
     return AUTO_ATTACH_DOMAINS.some((domain) => {
       const d = String(domain || '').toLowerCase().trim()
       return host === d || host.endsWith(`.${d}`)
@@ -590,7 +602,7 @@ async function isAlreadyAttached(tabId) {
 }
 
 async function autoAttach(tabId, url, reason = 'auto') {
-  if (!tabId || !isAutoAttachUrl(url)) return
+  if (!tabId || !(await isAutoAttachUrl(url))) return
 
   if (await isAlreadyAttached(tabId)) return
   if (tabOperationLocks.has(tabId)) return
@@ -621,8 +633,8 @@ async function connectOrToggleForActiveTab() {
   let tabId = active?.id
   const tabUrl = active?.url
 
-  // If current tab is not a valid Sonos URL, open default URL in new tab
-  if (tabId && !isAutoAttachUrl(tabUrl)) {
+  // If current tab is not eligible for auto-attach, open default URL in new tab
+  if (tabId && !(await isAutoAttachUrl(tabUrl))) {
     const defaultUrl = await getDefaultUrl()
     try {
       const newTab = await chrome.tabs.create({ url: defaultUrl, active: true })

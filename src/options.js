@@ -3,6 +3,7 @@ import { classifyRelayCheckException, classifyRelayCheckResponse } from './optio
 
 const DEFAULT_PORT = 18792
 const DEFAULT_URL = 'https://play.sonos.com/'
+const DEFAULT_AUTO_ATTACH_ALL_SITES = false
 
 function clampPort(value) {
   const n = Number.parseInt(String(value || ''), 10)
@@ -50,19 +51,22 @@ async function checkRelayReachable(port, token) {
 }
 
 async function load() {
-  const stored = await chrome.storage.local.get(['relayPort', 'gatewayToken', 'defaultUrl'])
+  const stored = await chrome.storage.local.get(['relayPort', 'gatewayToken', 'defaultUrl', 'autoAttachAllSites'])
   const port = clampPort(stored.relayPort)
   const token = String(stored.gatewayToken || '').trim()
   const defaultUrl = String(stored.defaultUrl || DEFAULT_URL).trim()
-  
+  const autoAttachAllSites = stored.autoAttachAllSites === true ? true : DEFAULT_AUTO_ATTACH_ALL_SITES
+
   const portEl = document.getElementById('port')
   const tokenEl = document.getElementById('token')
   const urlEl = document.getElementById('defaultUrl')
-  
+  const autoAttachAllSitesEl = document.getElementById('autoAttachAllSites')
+
   if (portEl) portEl.value = String(port)
   if (tokenEl) tokenEl.value = token
   if (urlEl) urlEl.value = defaultUrl
-  
+  if (autoAttachAllSitesEl) autoAttachAllSitesEl.checked = autoAttachAllSites
+
   updateRelayUrl(port)
   await checkRelayReachable(port, token)
 }
@@ -71,17 +75,20 @@ async function save() {
   const portInput = document.getElementById('port')
   const tokenInput = document.getElementById('token')
   const urlInput = document.getElementById('defaultUrl')
-  
+  const autoAttachAllSitesInput = document.getElementById('autoAttachAllSites')
+
   const port = clampPort(portInput?.value)
   const token = String(tokenInput?.value || '').trim()
   const defaultUrl = String(urlInput?.value || DEFAULT_URL).trim()
-  
-  await chrome.storage.local.set({ relayPort: port, gatewayToken: token, defaultUrl })
-  
+  const autoAttachAllSites = autoAttachAllSitesInput?.checked === true
+
+  await chrome.storage.local.set({ relayPort: port, gatewayToken: token, defaultUrl, autoAttachAllSites })
+
   if (portInput) portInput.value = String(port)
   if (tokenInput) tokenInput.value = token
   if (urlInput) urlInput.value = defaultUrl
-  
+  if (autoAttachAllSitesInput) autoAttachAllSitesInput.checked = autoAttachAllSites
+
   updateRelayUrl(port)
   await checkRelayReachable(port, token)
 }
