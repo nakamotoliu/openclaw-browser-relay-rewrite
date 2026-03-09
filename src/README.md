@@ -1,23 +1,26 @@
-# OpenClaw Chrome Extension (Browser Relay)
+# OpenClaw Chrome Extension Rewriter (Browser Relay)
 
-Purpose: attach OpenClaw to an existing Chrome tab so the Gateway can automate it (via the local CDP relay server).
+Purpose: keep our custom relay extension aligned with the latest official OpenClaw Chrome extension, then layer our own behavior on top.
 
-## Dev / load unpacked
+## Version split
 
-1. Build/run OpenClaw Gateway with browser control enabled.
-2. Ensure the relay server is reachable at `http://127.0.0.1:18792/` (default).
-3. Install the extension to a stable path:
+- Official upstream base: **2026-03-09** (`openclaw/openclaw`, commit `f6d0712f508b`)
+- Custom rewriter version: **0.2.4**
 
-   ```bash
-   openclaw browser extension install
-   openclaw browser extension path
-   ```
+## Local rule
 
-4. Chrome → `chrome://extensions` → enable “Developer mode”.
-5. “Load unpacked” → select the path printed above.
-6. Pin the extension. Click the icon on a tab to attach/detach.
+From now on, this directory is maintained like this:
 
-## Options
+1. pull latest official code
+2. overwrite this custom directory with the official extension files
+3. re-apply our custom changes
+4. keep Chrome loading this directory
 
-- `Relay port`: defaults to `18792`.
-- `Gateway token`: required. Set this to `gateway.auth.token` (or `OPENCLAW_GATEWAY_TOKEN`).
+No more parallel mystery versions.
+
+## Custom behavior in this build
+
+- default support for all `http://*/*` and `https://*/*` domains
+- auto-attach on normal web pages by default
+- ignore non-web URLs like `chrome://`, `chrome-extension://`, `devtools://`
+- show official upstream base date separately from our custom version
