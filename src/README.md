@@ -4,7 +4,7 @@ Purpose: keep our custom relay extension aligned with the latest official OpenCl
 
 ## Version split
 
-- Official upstream base: **2026-03-09** (`openclaw/openclaw`, commit `f6d0712f508b`)
+- Official extension base date: **2026-03-08** (`openclaw/openclaw` → `assets/chrome-extension`, commit `362248e55908`)
 - Custom rewriter version: **0.2.4**
 
 ## Local rule
